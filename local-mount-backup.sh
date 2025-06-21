@@ -211,8 +211,8 @@ do_show_status() {
     else
         while IFS= read -r log_file; do
             local start_string end_string status start_ts end_ts duration
-            start_string=$(grep "--- Backup Started:" "$log_file" | sed 's/.*: //')
-            end_string=$(grep "--- Backup Finished:" "$log_file" | sed 's/.*: //')
+            start_string=$(grep -e "--- Backup Started:" "$log_file" | sed 's/.*: //')
+            end_string=$(grep -e "--- Backup Finished:" "$log_file" | sed 's/.*: //')
 
             if [ -n "$start_string" ] && [ -n "$end_string" ]; then
                 start_ts=$(date -d "$start_string" +%s)
