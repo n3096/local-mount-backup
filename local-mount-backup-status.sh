@@ -12,11 +12,7 @@
 # ====================================================================================
 
 # --- Configuration ---
-DEVICE_NAME="my-device"
-LOG_DIR="/srv/scripts/backup-${DEVICE_NAME}/logs"
-LOCK_DIR="/srv/scripts/backup-${DEVICE_NAME}/lock"
-BACKUP_SCRIPT_NAME="backup-${DEVICE_NAME}.sh"
-LOCK_FILE="${LOCK_DIR}/${BACKUP_SCRIPT_NAME}.pid"
+source /pfad/zu/ihrer/backup-my-device.conf
 
 # --- Helper Functions ---
 format_duration() {

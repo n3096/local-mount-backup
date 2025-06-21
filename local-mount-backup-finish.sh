@@ -12,13 +12,7 @@
 # ====================================================================================
 
 # --- Configuration ---
-# IMPORTANT: These paths MUST match the configuration in your main backup script!
-DEVICE_NAME="my-device"
-LOCK_DIR="/srv/scripts/backup-${DEVICE_NAME}/lock"
-BACKUP_SCRIPT_NAME="backup-${DEVICE_NAME}.sh"
-LOCK_FILE="${LOCK_DIR}/${BACKUP_SCRIPT_NAME}.pid"
-MOUNT_POINT="/mnt/backup-usb"
-
+source /pfad/zu/ihrer/backup-my-device.conf
 
 # --- Pre-run Checks ---
 

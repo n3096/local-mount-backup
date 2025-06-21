@@ -12,17 +12,7 @@
 # ====================================================================================
 
 # --- Configuration ---
-DEVICE_NAME="my-device"
-SOURCE_DIRS=("/srv" "/mnt/main")
-DEST_DIR="/mnt/backup-usb/${DEVICE_NAME}/backup"
-LOG_DIR="/srv/scripts/backup-${DEVICE_NAME}/logs"
-LOG_FILE="${LOG_DIR}/backup_$(date +%Y-%m-%d_%H-%M-%S).log"
-RSYNC_OPTS="-aH --partial --delete --stats"
-DRIVE_UUID="0915a79b-24b6-4d65-8d79-1b6d1e08aca2"
-MOUNT_POINT="/mnt/backup-usb"
-LOCK_DIR="/srv/scripts/backup-${DEVICE_NAME}/lock"
-LOCK_FILE="${LOCK_DIR}/$(basename "$0").pid"
-
+source /pfad/zu/ihrer/backup-my-device.conf
 
 # This function defines the main backup workload.
 run_backup_workload() {
@@ -87,7 +77,7 @@ else
         OTHER_PID=$(cat "$LOCK_FILE")
         # IMPROVED CHECK: Look at the full command arguments ('args'), not just the command name ('comm').
         # Then, grep for the script's basename to ensure we're looking at the correct process.
-        if ps -p "$OTHER_PID" -o args= | grep -q "[b]ackup-${DEVICE_NAME}.sh"; then
+        if ps -p "$OTHER_PID" -o args= | grep -q "[${BACKUP_SCRIPT_NAME:0:1}]${BACKUP_SCRIPT_NAME:1}"; then
             echo "❌ ERROR: Backup script appears to be running with PID: $OTHER_PID. Aborting."
             exit 1
         else
