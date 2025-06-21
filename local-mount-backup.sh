@@ -22,8 +22,6 @@ else
 fi
 
 # --- HELPER & VALIDATION FUNCTIONS ---
-
-# NEW: This function validates the settings loaded from the .conf file.
 validate_config() {
     local error_found=0
     echo "INFO: Validating configuration..."
@@ -91,18 +89,17 @@ show_help() {
     echo "  help    - Displays this help message."
 }
 
-# --- Call the validation function right after sourcing the config ---
 validate_config
 
 # --- NON-CONFIGURABLE DERIVED VARIABLES ---
+BACKUP_SCRIPT_NAME=$(basename -- "$0")
 DEST_DIR="${MOUNT_POINT}/${DEVICE_NAME}/backup"
 LOG_DIR="${SCRIPT_DIR}/logs"
+LOG_FILE="${LOG_DIR}/backup_$(date +%Y%m%d-%H%M%S).log"
 LOCK_DIR="${SCRIPT_DIR}/lock"
-BACKUP_SCRIPT_NAME=$(basename -- "$0")
 LOCK_FILE="${LOCK_DIR}/${BACKUP_SCRIPT_NAME}.pid"
 
 # --- CORE LOGIC FUNCTIONS ---
-# (The content of these functions remains the same as before)
 do_start_launcher() {
     if [ "$EUID" -ne 0 ]; then
       echo "Error: 'start' command must be run with sudo." >&2
@@ -123,6 +120,7 @@ do_start_launcher() {
     fi
 
     echo "Starting backup process in the background..."
+    echo "Logs are written to: $LOG_DIR"
     nohup "$0" --background > /dev/null 2>&1 &
     echo "Backup job submitted. Check status with: $BACKUP_SCRIPT_NAME status"
 }
@@ -133,6 +131,8 @@ do_run_backup() {
     mkdir -p "$LOG_DIR"
 
     if ! mountpoint -q "$MOUNT_POINT"; then
+        echo "INFO: Mount point not mounted. Attempting to mount..." | tee -a "$LOG_FILE"
+        mkdir -p "$MOUNT_POINT"
         mount UUID="$DRIVE_UUID" "$MOUNT_POINT" >> "$LOG_FILE" 2>&1
         if [ $? -ne 0 ]; then
             echo "❌ ERROR: Failed to mount drive. Aborting." | tee -a "$LOG_FILE" >&2
@@ -200,6 +200,40 @@ do_show_status() {
                 printf "%-28s | %s\n" "Last backup status" "⚠️ UNKNOWN (Incomplete log file)"
             fi
         fi
+    fi
+    echo "----------------------------------------------------------------------"
+    echo "Backup History (last 10 entries):"
+    local all_logs
+    all_logs=$(ls -t "$LOG_DIR"/backup_*.log 2>/dev/null | head -n 10)
+
+    if [ -z "$all_logs" ]; then
+        echo "  No history found."
+    else
+        while IFS= read -r log_file; do
+            local start_string end_string status start_ts end_ts duration
+            start_string=$(grep "--- Backup Started:" "$log_file" | sed 's/.*: //')
+            end_string=$(grep "--- Backup Finished:" "$log_file" | sed 's/.*: //')
+
+            if [ -n "$start_string" ] && [ -n "$end_string" ]; then
+                start_ts=$(date -d "$start_string" +%s)
+                end_ts=$(date -d "$end_string" +%s)
+                duration=$((end_ts - start_ts))
+
+                if grep -q "✅ Rsync completed successfully." "$log_file"; then
+                    status="✅ SUCCESS"
+                else
+                    status="❌ FAILURE"
+                fi
+
+                printf "  %s (%s; %s)\n" \
+                    "$(date -d "@$start_ts" +"%Y-%m-%d %H:%M:%S")" \
+                    "$status" \
+                    "$(format_duration "$duration")"
+            else
+                local file_timestamp=$(stat -c %Y "$log_file")
+                printf "  %s (⚠️ INCOMPLETE LOG)\n" "$(date -d "@$file_timestamp" +"%Y-%m-%d %H:%M:%S")"
+            fi
+        done <<< "$all_logs"
     fi
     echo "----------------------------------------------------------------------"
 }
