@@ -65,6 +65,47 @@ validate_config() {
     echo "✅ Configuration seems valid."
 }
 
+send_discord_notification() {
+    if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+        return 0
+    fi
+
+    if ! command -v curl &> /dev/null; then
+        echo "WARN: 'curl' command not found, cannot send Discord notification." >&2
+        return 1
+    fi
+
+    local title="$1"
+    local message="$2"
+    local color_code="$3" # "green", "red", "blue", "orange"
+    local discord_color
+
+    case "$color_code" in
+        green)  discord_color=5814784  ;;
+        red)    discord_color=15746887 ;;
+        blue)   discord_color=3447003  ;;
+        orange) discord_color=15105570 ;;
+        *)      discord_color=10070709 ;;
+    esac
+
+    local hostname
+    hostname=$(hostname)
+
+    local json_payload
+    json_payload=$(printf '{
+      "username": "%s",
+      "embeds": [{
+        "title": "%s",
+        "description": "%s",
+        "color": %d,
+        "footer": { "text": "Hostname: %s" },
+        "timestamp": "%sT%s"
+      }]
+    }' "$DEVICE_NAME" "$title" "$message" "$discord_color" "$hostname" "$(date -u +%Y-%m-%d)" "$(date -u +%H:%M:%S.%3N)")
+
+    curl -H "Content-Type: application/json" -X POST -d "$json_payload" "$DISCORD_WEBHOOK_URL" > /dev/null 2>&1
+}
+
 format_duration() {
     local duration=$1
     if (( duration < 0 )); then duration=0; fi
@@ -126,37 +167,72 @@ do_start_launcher() {
 }
 
 do_run_backup() {
-    trap 'rm -f "$LOCK_FILE"' EXIT INT TERM
+    local backup_successful=false
+
+    cleanup() {
+        local exit_code=${1:-$?}
+        if [[ "$backup_successful" == "false" ]] && [[ "$exit_code" -ne 0 ]]; then
+            send_discord_notification "Backup Aborted / Failed" "The backup process was terminated unexpectedly (Exit Code: $exit_code)." "orange"
+        fi
+        rm -f "$LOCK_FILE"
+    }
+
+    trap 'cleanup' EXIT
+    trap 'echo "WARN: Interrupt signal caught, cleaning up..."; cleanup 130' INT
+    trap 'echo "WARN: Terminate signal caught, cleaning up..."; cleanup 143' TERM
+
     echo "$$" > "$LOCK_FILE"
     mkdir -p "$LOG_DIR"
+    local LOG_FILE="${LOG_DIR}/backup_$(date +%Y%m%d-%H%M%S).log"
+
+    send_discord_notification "Backup Started" "Backup process for device '$DEVICE_NAME' has been initiated." "blue"
 
     if ! mountpoint -q "$MOUNT_POINT"; then
         echo "INFO: Mount point not mounted. Attempting to mount..." | tee -a "$LOG_FILE"
         mkdir -p "$MOUNT_POINT"
         mount UUID="$DRIVE_UUID" "$MOUNT_POINT" >> "$LOG_FILE" 2>&1
         if [ $? -ne 0 ]; then
-            echo "❌ ERROR: Failed to mount drive. Aborting." | tee -a "$LOG_FILE" >&2
+            local mount_error="❌ ERROR: Failed to mount drive with UUID '$DRIVE_UUID'. Aborting."
+            echo "$mount_error" | tee -a "$LOG_FILE" >&2
+            send_discord_notification "Backup Failure" "$mount_error" "red"
             exit 1
         fi
     fi
 
     mkdir -p "$DEST_DIR"
     if [ ! -w "$DEST_DIR" ]; then
-        echo "❌ ERROR: Destination directory $DEST_DIR not writable. Aborting." | tee -a "$LOG_FILE" >&2
+        local perm_error="❌ ERROR: Destination directory '$DEST_DIR' not writable. Aborting."
+        echo "$perm_error" | tee -a "$LOG_FILE" >&2
+        send_discord_notification "Backup Failure" "$perm_error" "red"
         exit 1
     fi
 
     echo "--- Backup Started: $(date) ---" | tee -a "$LOG_FILE"
+
+    local start_time
+    start_time=$(date +%s)
+
     rsync $RSYNC_OPTS "${SOURCE_DIRS[@]}" "$DEST_DIR" >> "$LOG_FILE" 2>&1
-    RSYNC_EXIT_CODE=$?
+    local rsync_exit_code=$?
+
+    local end_time duration
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
+
     echo "--- Backup Finished: $(date) ---" | tee -a "$LOG_FILE"
 
-    if [ $RSYNC_EXIT_CODE -eq 0 ]; then
-      echo "✅ Rsync completed successfully." | tee -a "$LOG_FILE"
+    if [ $rsync_exit_code -eq 0 ]; then
+        local success_msg="✅ Rsync completed successfully in $(format_duration "$duration")."
+        echo "$success_msg" | tee -a "$LOG_FILE"
+        send_discord_notification "Backup Success" "$success_msg" "green"
+        backup_successful=true
     else
-      echo "❌ ERROR: Rsync failed with exit code $RSYNC_EXIT_CODE." | tee -a "$LOG_FILE"
+        local rsync_error_msg="❌ ERROR: Rsync failed with exit code $rsync_exit_code after $(format_duration "$duration")."
+        echo "$rsync_error_msg" | tee -a "$LOG_FILE"
+        send_discord_notification "Backup Failure" "$rsync_error_msg" "red"
     fi
-    exit $RSYNC_EXIT_CODE
+
+    exit $rsync_exit_code
 }
 
 do_show_status() {

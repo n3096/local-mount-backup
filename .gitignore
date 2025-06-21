@@ -1,1 +1,4 @@
 /.idea/
+
+/local-mount-backup.conf
+/local-mount-backup.conf-*

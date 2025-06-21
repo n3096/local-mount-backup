@@ -16,3 +16,7 @@ SOURCE_DIRS=("/srv" "/mnt/main")
 
 # Options for the rsync command.
 RSYNC_OPTS="-aH --partial --delete --stats"
+
+# Discord Webhook URL for notifications.
+# Leave empty to disable; Example: https://discord.com/api/webhooks/1234567890/abcdef...
+DISCORD_WEBHOOK_URL=""
