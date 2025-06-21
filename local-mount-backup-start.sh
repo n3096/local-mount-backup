@@ -12,7 +12,7 @@
 # ====================================================================================
 
 # --- Configuration ---
-source /pfad/zu/ihrer/backup-my-device.conf
+source /srv/scripts/local-mount-backup.conf
 
 # This function defines the main backup workload.
 run_backup_workload() {

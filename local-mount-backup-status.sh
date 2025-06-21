@@ -12,7 +12,7 @@
 # ====================================================================================
 
 # --- Configuration ---
-source /pfad/zu/ihrer/backup-my-device.conf
+source /srv/scripts/local-mount-backup.conf
 
 # --- Helper Functions ---
 format_duration() {
